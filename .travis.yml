@@ -9,6 +9,5 @@ deploy:
   password:
     secure: Y45II57WGnB8fm3yRBpVH9k1i/hSKbjpGazcVAfvwyzefFpGL5U/xa9xA4NRWay2WoS8pVMiyTRR7so4Ujv8Jo+aUOWw++nlkamYRF6pvMjPJQe0NTF0JqWfz+KnI8uxZFw2XcHrqBu4bX59TALXTko9vogNneBSqi9rV2WvQgo=
   on:
-    tags: true
     repo: lsamaha/dervish
     all_branches: true
