@@ -10,8 +10,8 @@ class IndexTest(unittest.TestCase):
         data = '{"message_uid":"ae584408-5118-4149-b30a-fdedc32aa4fe","at":1423164438.46,' \
                '"env": "dev", "event_class": "start", "event_type": "whirl", "product": "mimi", "subtype": "forth"}'
         table = MockTable()
-        Index.table_for_name = lambda x, y : table
-        index = Index(conn = MockConn(), table='mocked')
+        Index.table_for_name = staticmethod(lambda x: table)
+        index = Index(conn = MockConn(), table_name='mocked')
         item = MockItem(data)
         index.create_item = lambda x : item
         index.put(data)

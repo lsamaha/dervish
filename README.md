@@ -35,4 +35,3 @@ The result of invoking the dervish is:
 ## Do It Yourself
 
 By reviewing the docs and the whirling class, it should be easy to see how to generate a graph of custom consumers.
-

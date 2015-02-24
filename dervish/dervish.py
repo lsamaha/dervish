@@ -4,31 +4,34 @@ from __future__ import print_function
 
 __author__ = 'luke'
 
-import sys, time, json, base64
+import sys, time, base64, logging
 from amazon_kclpy import kcl
 from boto.dynamodb2.layer1 import DynamoDBConnection
-from boto.dynamodb2.table import Table
 from boto.s3.connection import S3Connection
 from index import Index
 from store import Store
+from log import Log
 
 class Dervish(kcl.RecordProcessorBase):
 
     table_name = 'event'
     s3bucket = 'meadow-lark'
-    path = 'path'
+    path = 'dervish/event'
+    logger = None
 
     '''
+    From AWS KCL template:
     A RecordProcessor processes a shard in a stream. Its methods will be called with this pattern:
 
     - initialize will be called once
     - process_records will be called zero or more times
     - shutdown will be called if this MultiLangDaemon instance loses the lease to this shard
     '''
-    def __init__(self):
+    def __init__(self, log_file = 'dervish.log', debug = False):
         self.SLEEP_SECONDS = 5
         self.CHECKPOINT_RETRIES = 5
         self.CHECKPOINT_FREQ_SECONDS = 60
+        self.logger = Log().get_logger(log_file, debug)
 
     def initialize(self, shard_id):
         '''
@@ -53,6 +56,7 @@ class Dervish(kcl.RecordProcessorBase):
         for n in range(0, self.CHECKPOINT_RETRIES):
             try:
                 checkpointer.checkpoint(sequence_number)
+                self.logger.info("checkpoint %d" % sequence_number)
                 return
             except kcl.CheckpointError as e:
                 if 'ShutdownException' == e.value:
@@ -94,10 +98,24 @@ class Dervish(kcl.RecordProcessorBase):
         ####################################
         # Insert your processing logic here
         ####################################
-        index = Index(conn=DynamoDBConnection(), table=Table(table_name=self.table_name))
-        index.put(data)
-        store = Store(S3Connection())
-        store.put(s3bucket=self.s3bucket, path=self.path, id=sequence_number, data=data)
+        wrote_index = False
+        try:
+            self.logger.info("processing record %d:%s" % (sequence_number, partition_key))
+            self.logger.info("putting data:%s" % (data))
+            index = Index(conn=DynamoDBConnection(), table_name=self.table_name)
+            index.put(data)
+            wrote_index = True
+        except Exception as e:
+            self.logger.error("error putting index in dynamodb %s" % e.message)
+        if wrote_index:
+            try:
+                self.logger.info("posting to s3 %s://%s/%s" % (self.s3bucket, self.path, sequence_number))
+                store = Store(S3Connection())
+                store.put(s3bucket=self.s3bucket, path=self.path, id=sequence_number, data=data)
+                self.logger.info("posted data:%s" % (data))
+            except Exception as e:
+                self.logger.error("error posting to s3 %s" % e.message)
+
 
     def process_records(self, records, checkpointer):
         '''
@@ -114,17 +132,22 @@ class Dervish(kcl.RecordProcessorBase):
         :param checkpointer: A checkpointer which accepts a sequence number or no parameters.
         '''
         try:
+            self.logger.info("processing record group of size %d" % (len(records)))
             for record in records:
                 # record data is base64 encoded, so we need to decode it first
                 data = base64.b64decode(record.get('data'))
+                self.logger.info("decoded data:%s" % (data))
                 seq = record.get('sequenceNumber')
+                self.logger.info("sequence:%s" % (seq))
                 seq = int(seq)
+                self.logger.info("integer sequence:%d" % (seq))
                 key = record.get('partitionKey')
                 self.process_record(data, key, seq)
                 if self.largest_seq == None or seq > self.largest_seq:
                     self.largest_seq = seq
             # Checkpoints every 60 seconds
             if time.time() - self.last_checkpoint_time > self.CHECKPOINT_FREQ_SECONDS:
+                self.logger.info("checkpoint:%s" % (str(self.largest_seq)))
                 self.checkpoint(checkpointer, str(self.largest_seq))
                 self.last_checkpoint_time = time.time()
         except Exception as e:
@@ -150,7 +173,6 @@ class Dervish(kcl.RecordProcessorBase):
                 # Checkpointing with no parameter will checkpoint at the
                 # largest sequence number reached by this processor on this
                 # shard id
-                print('Was told to terminate, will attempt to checkpoint.')
                 self.checkpoint(checkpointer, None)
             else: # reason == 'ZOMBIE'
                 print('Shutting down due to failover. Will not checkpoint.')

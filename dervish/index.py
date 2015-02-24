@@ -3,7 +3,8 @@ __author__ = 'luke'
 from boto.dynamodb2.table import Table, Item, HashKey, RangeKey, GlobalAllIndex
 from boto.dynamodb2.types import NUMBER
 from boto.exception import JSONResponseError
-import time
+from uuid import uuid4
+import json, time, logging
 
 class Index(object):
 
@@ -14,16 +15,27 @@ class Index(object):
     write_through = 1
     at_read_through = 1
     at_write_through = 1
+    hash_key = 'event_uuid'
+    at = 'at'
 
-    def __init__(self, conn, table = 'event', create_timeout=360):
+    def __init__(self, conn, table_name='event', create_timeout=360, logger=logging.getLogger('Service.Python.Logger')):
         self.conn = conn
-        if not self.exists(table):
-            self.create_table(table, create_timeout, self.pause)
-        self.table = Index.table_for_name(self, table)
+        self.logger = logger
+        if not self.exists(table_name):
+            self.create_table(table_name, create_timeout, self.pause)
+        self.table = Index.table_for_name(table_name)
 
-    def put(self, data):
+    def put(self, data_str):
+        self.logger.info("putting item")
+        data = json.loads(data_str)
+        if not self.hash_key in data:
+            data[self.hash_key] = str(uuid4())
+        if not self.at in data:
+            data[self.at] = int(time.time() * 1000)
         item = self.create_item(data)
         item.save()
+        self.logger.info("saved item %s " % (data[self.hash_key]))
+        return data[self.hash_key]
 
     def create_item(self, data):
         return Item(self.table, data=data)
@@ -32,6 +44,7 @@ class Index(object):
         desc = None
         try:
             desc = self.conn.describe_table(table_name=table_name)
+            self.logger.info("found table %s" % table_name)
         except JSONResponseError, e:
             if 'Table' in e.message and 'not found' in e.message:
                 pass
@@ -47,8 +60,9 @@ class Index(object):
         return Table(table_name)
 
     def create_table(self, table, create_timeout, pause):
-        self.table = Table.create(table, schema=[
-            HashKey('message_uid'),
+        self.logger.info("creating table %s" % table)
+        self.table_name = Table.create(table, schema=[
+            HashKey(self.hash_key),
             RangeKey('at', data_type=NUMBER)], throughput={
             'read':self.at_read_through,
             'write': self.at_write_through,
@@ -66,15 +80,13 @@ class Index(object):
         )
         created = False
         now = time.time()
-        if create_timeout > 0:
-            print "waiting %d seconds" % create_timeout,
         while not created:
             created = self.exists(table)
-            time.sleep(pause)
-            print '.',
-            if create_timeout < 0 or time.time() < now + create_timeout:
-                print
-                raise StoreCreateTimeoutException("unable to create %s after %d seconds" % (table, create_timeout))
+            if not created:
+                time.sleep(pause)
+                self.logger.info("waiting %d seconds" % create_timeout)
+                if create_timeout < 0 or time.time() < now + create_timeout:
+                    raise StoreCreateTimeoutException("unable to create %s after %d seconds" % (table, create_timeout))
         print
 
 class StoreCreateTimeoutException(Exception):
