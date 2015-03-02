@@ -4,7 +4,7 @@ from __future__ import print_function
 
 __author__ = 'luke'
 
-import sys, time, base64, logging
+import sys, time, base64, uuid
 from amazon_kclpy import kcl
 from boto.dynamodb2.layer1 import DynamoDBConnection
 from boto.s3.connection import S3Connection
@@ -13,11 +13,6 @@ from store import Store
 from log import Log
 
 class Dervish(kcl.RecordProcessorBase):
-
-    table_name = 'event'
-    s3bucket = 'meadow-lark'
-    path = 'dervish/event'
-    logger = None
 
     '''
     From AWS KCL template:
@@ -28,6 +23,9 @@ class Dervish(kcl.RecordProcessorBase):
     - shutdown will be called if this MultiLangDaemon instance loses the lease to this shard
     '''
     def __init__(self, log_file = 'dervish.log', debug = False):
+        self.table_name = 'event'
+        self.s3bucket = 'spsbucket'
+        self.s3path = 'dervish/event'
         self.SLEEP_SECONDS = 5
         self.CHECKPOINT_RETRIES = 5
         self.CHECKPOINT_FREQ_SECONDS = 60
@@ -109,9 +107,9 @@ class Dervish(kcl.RecordProcessorBase):
             self.logger.error("error putting index in dynamodb %s" % e.message)
         if wrote_index:
             try:
-                self.logger.info("posting to s3 %s://%s/%s" % (self.s3bucket, self.path, sequence_number))
-                store = Store(S3Connection())
-                store.put(s3bucket=self.s3bucket, path=self.path, id=sequence_number, data=data)
+                self.logger.info("posting to s3 s3://%s/%s/%s" % (self.s3bucket, self.s3path, sequence_number))
+                store = Store(S3Connection(), s3bucket = self.s3bucket, s3path = self.s3path)
+                store.put(uuid=uuid.uuid4(), data=data)
                 self.logger.info("posted data:%s" % (data))
             except Exception as e:
                 self.logger.error("error posting to s3 %s" % e.message)
@@ -173,7 +171,7 @@ class Dervish(kcl.RecordProcessorBase):
                 # Checkpointing with no parameter will checkpoint at the
                 # largest sequence number reached by this processor on this
                 # shard id
-                self.checkpoint(checkpointer, None)
+                self.checkpoint(checkpointer, str(None))
             else: # reason == 'ZOMBIE'
                 print('Shutting down due to failover. Will not checkpoint.')
         except:

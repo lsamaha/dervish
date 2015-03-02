@@ -1,24 +1,26 @@
 __author__ = 'luke'
 
 from boto.dynamodb2.table import Table, Item, HashKey, RangeKey, GlobalAllIndex
-from boto.dynamodb2.types import NUMBER
 from boto.exception import JSONResponseError
 from uuid import uuid4
 import json, time, logging
 
 class Index(object):
 
-    conn = None
-    table = None
-    pause = 2000
-    read_through = 1
-    write_through = 1
-    at_read_through = 1
-    at_write_through = 1
     hash_key = 'event_uuid'
+    env = 'env'
+    product = 'product'
+    event_class = 'event_class'
+    event_type = 'event_type'
     at = 'at'
+    none = 'none'
+    envproductclasstypeat = 'epcta'
 
     def __init__(self, conn, table_name='event', create_timeout=360, logger=logging.getLogger('Service.Python.Logger')):
+        self.table = None
+        self.pause = 2000
+        self.at_read_through = 1
+        self.at_write_through = 1
         self.conn = conn
         self.logger = logger
         if not self.exists(table_name):
@@ -32,10 +34,28 @@ class Index(object):
             data[self.hash_key] = str(uuid4())
         if not self.at in data:
             data[self.at] = int(time.time() * 1000)
+        self.ensure_key_elements(data)
+        self.create_compound_key(data)
         item = self.create_item(data)
         item.save()
         self.logger.info("saved item %s " % (data[self.hash_key]))
         return data[self.hash_key]
+
+    def create_compound_key(self, data):
+        if not self.envproductclasstypeat in data:
+            data[self.envproductclasstypeat] = \
+                "%s|%s|%s|%s|%s" % \
+                (data[self.env], data[self.product], data[self.event_class], data[self.event_type], data[self.at])
+
+    def ensure_key_elements(self, data):
+        if self.env not in data:
+            data[self.env] = self.none
+        if self.product not in data:
+            data[self.product] = self.none
+        if self.event_class not in data:
+            data[self.event_class] = self.none
+        if self.event_type not in data:
+            data[self.event_type] = self.none
 
     def create_item(self, data):
         return Item(self.table, data=data)
@@ -61,22 +81,15 @@ class Index(object):
 
     def create_table(self, table, create_timeout, pause):
         self.logger.info("creating table %s" % table)
-        self.table_name = Table.create(table, schema=[
-            HashKey(self.hash_key),
-            RangeKey('at', data_type=NUMBER)], throughput={
-            'read':self.at_read_through,
-            'write': self.at_write_through,
-            },
-                                  global_indexes=[
-                                      GlobalAllIndex('productat', parts=[
-                                          HashKey('product'),
-                                          RangeKey('at'),
-                                          ],
-                                                     throughput={
-                                                         'read':1,
-                                                         'write':1
-                                                     })
-                                  ]
+        self.table_name = Table.create(
+            table, schema=[
+                HashKey(self.hash_key)
+            ],
+            throughput={'read':self.at_read_through,'write': self.at_write_through,},
+            global_indexes=[
+                GlobalAllIndex(self.envproductclasstypeat, parts=[HashKey('product'), RangeKey(self.envproductclasstypeat)],
+                               throughput={'read':1,'write':1})
+            ]
         )
         created = False
         now = time.time()
