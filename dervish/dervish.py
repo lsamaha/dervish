@@ -22,13 +22,19 @@ class Dervish(kcl.RecordProcessorBase):
     - process_records will be called zero or more times
     - shutdown will be called if this MultiLangDaemon instance loses the lease to this shard
     '''
-    def __init__(self, log_file = 'dervish.log', debug = False):
-        self.table_name = 'event'
-        self.s3bucket = 'spsbucket'
-        self.s3path = 'dervish/event'
+    def __init__(self,
+                 table_name, s3bucket, s3path,
+                 max_events_per_s3 = 10000, max_s3_bytes = 200 * 1024 * 1024,
+                 max_push_interval = 120 * 60,
+                 log_file = 'dervish.log', debug = False):
+        self.table_name = table_name
+        self.s3bucket = s3bucket
+        self.s3path = s3path
         self.SLEEP_SECONDS = 5
         self.CHECKPOINT_RETRIES = 5
         self.CHECKPOINT_FREQ_SECONDS = 60
+        self.store = Store(S3Connection(), s3bucket = self.s3bucket, s3path = self.s3path,
+                           max_batch_size=max_events_per_s3, max_batch_bytes=max_s3_bytes, max_push_interval=max_push_interval)
         self.logger = Log().get_logger(log_file, debug)
 
     def initialize(self, shard_id):
@@ -108,8 +114,7 @@ class Dervish(kcl.RecordProcessorBase):
         if wrote_index:
             try:
                 self.logger.info("posting to s3 s3://%s/%s/%s" % (self.s3bucket, self.s3path, sequence_number))
-                store = Store(S3Connection(), s3bucket = self.s3bucket, s3path = self.s3path)
-                store.put(uuid=uuid.uuid4(), data=data)
+                self.store.put(uuid=uuid.uuid4(), data=data)
                 self.logger.info("posted data:%s" % (data))
             except Exception as e:
                 self.logger.error("error posting to s3 %s" % e.message)
