@@ -65,7 +65,7 @@ class Index(object):
         try:
             desc = self.conn.describe_table(table_name=table_name)
             self.logger.info("found table %s" % table_name)
-        except JSONResponseError, e:
+        except JSONResponseError as e:
             if 'Table' in e.message and 'not found' in e.message:
                 pass
             else:
@@ -100,7 +100,6 @@ class Index(object):
                 self.logger.info("waiting %d seconds" % create_timeout)
                 if create_timeout < 0 or time.time() < now + create_timeout:
                     raise StoreCreateTimeoutException("unable to create %s after %d seconds" % (table, create_timeout))
-        print
 
 class StoreCreateTimeoutException(Exception):
     pass

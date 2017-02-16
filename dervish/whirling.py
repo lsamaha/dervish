@@ -1,7 +1,7 @@
 __author__ = 'luke'
 
 import sys
-from dervish import Dervish
+from dervish.dervish import Dervish
 from amazon_kclpy import kcl
 
 def main():

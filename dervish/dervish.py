@@ -8,9 +8,9 @@ import sys, time, base64, uuid
 from amazon_kclpy import kcl
 from boto.dynamodb2.layer1 import DynamoDBConnection
 from boto.s3.connection import S3Connection
-from index import Index
-from store import Store
-from log import Log
+from dervish.index import Index
+from dervish.store import Store
+from dervish.log import Log
 
 class Dervish(kcl.RecordProcessorBase):
 
