@@ -14,6 +14,8 @@ class IndexTest(unittest.TestCase):
         item = MockItem(data)
         index.create_item = lambda x : item
         index.put(data)
+        table = MockTable()
+        index.table_for_name = lambda x : table
         self.assertEquals(1, item.count)
         self.assertEquals(data, item.last_put)
 
