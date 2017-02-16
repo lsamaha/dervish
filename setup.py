@@ -11,7 +11,7 @@ def read(fname):
 
 setup(
     name = "dervish",
-    version = "0.0.10",
+    version = "0.0.11",
     author = "Luke Samaha",
     author_email = "lwsamaha@gmail.com",
     description = ("Demonstrates AWS kinesis consumers writing events to s3 and indexing them in dynamodb."),
@@ -28,5 +28,5 @@ classifiers=[
     'Intended Audience :: Developers',
     'Topic :: Software Development :: Build Tools',
     'License :: OSI Approved :: BSD License',
-    'Programming Language :: Python :: 2.7'
+    'Programming Language :: Python :: 3.6'
 ]
