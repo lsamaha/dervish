@@ -22,6 +22,8 @@ class IndexTest(unittest.TestCase):
     def test_ensure_keys(self):
         data_without_keys = '{"message_uid":"ae584408-5118-4149-b30a-fdedc32aa4fe","at":1423164438, "subtype": "forth"}'
         data = json.loads(data_without_keys)
+        table = MockTable()
+        Index.table_for_name = lambda x : table
         index = Index(conn = MockConn(), table_name='mocked')
         index.ensure_key_elements(data)
         self.assertEquals(data['env'], index.none)
@@ -33,6 +35,8 @@ class IndexTest(unittest.TestCase):
         data_without_keys = '{"message_uid":"ae584408-5118-4149-b30a-fdedc32aa4fe","at":1423164438,' \
                             '"product": "mysvc", "env": "dev", "subtype": "forth"}'
         data = json.loads(data_without_keys)
+        table = MockTable()
+        Index.table_for_name = lambda x : table
         index = Index(conn = MockConn(), table_name='mocked')
         index.ensure_key_elements(data)
         index.create_compound_key(data)
